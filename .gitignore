@@ -1,0 +1,8 @@
+# Backups and test leftovers
+GD downgrade backup */
+*.geode
+*.zip
+.gd-downgrade-test
+
+# Old instructions, replaced by README.md
+README.txt
