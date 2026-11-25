@@ -8,13 +8,16 @@ Windows + Steam only.
 
 ## How to use
 
-1. Download this repo (green **Code** button → **Download ZIP**) and unzip it anywhere.
-2. Make sure Steam is open and Geometry Dash is closed.
-3. Double-click **`Downgrade GD to 2.2081.bat`**.
-4. When Steam's console opens, click the box at the bottom, press **Ctrl+V**, then **Enter**.
-5. Wait for the window to say **Done**, then open GD from Steam like normal.
+1. Download **`GD-Downgrade.zip`** from the [latest release](https://github.com/dan2756/gd-downgrade/releases/latest).
+2. Right-click the zip → **Extract All**, and open the extracted **GD Downgrade** folder.
+3. Make sure Steam is open and Geometry Dash is closed.
+4. Double-click **`Downgrade GD to 2.2081.bat`**.
+5. When Steam's console opens, click the box at the bottom, press **Ctrl+V**, then **Enter**.
+6. Wait for the window to say **Done**, then open GD from Steam like normal.
 
-If Windows says it protected your PC, click **More info**, then **Run anyway**.
+Windows may warn you before it runs a downloaded file. Click **Run**, or **More info** → **Run anyway**.
+
+Already on 2.2081? Downgrade notices that and skips the download.
 
 ### The other two buttons
 
@@ -34,7 +37,7 @@ For every mod in `geode\mods`, GD Downgrade checks which GD version and Geode ve
 
 Every version a mod gets swapped away from is kept in `geode\parked-mods` too. When you switch GD versions later (with Undo, or by downgrading again), parked versions that fit come back first, so you get your exact versions back. That includes mods that aren't on the index, like ones you made yourself.
 
-Mega Hack isn't on the Geode index. Its installer mod is switched to the right version instead, and puts the matching Mega Hack back the next time you open GD.
+**Mega Hack** is a paid mod and isn't on the Geode index, so GD Downgrade can't swap it. If your Mega Hack doesn't fit the new GD version, it's parked like any other mod. Reinstall the right version with Mega Hack's own installer.
 
 ## Safety
 

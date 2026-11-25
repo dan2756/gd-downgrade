@@ -5,6 +5,7 @@ param([switch]$Undo, [switch]$GeodeOnly, [string]$Manifest = "")
 # newest GD. Run with -Undo to go back to the newest version, or -GeodeOnly to
 # only fix Geode and mods on a GD that's already on 2.2081.
 
+$ToolVersion = "1.0.0"
 $TargetGd = "2.2081"
 $DefaultManifest = "3816559102876907245"
 $AppId = 322170
@@ -91,6 +92,7 @@ function Sync-GeodeSafely($gd, $target, $backup) {
         Say ""
         Say "     Couldn't update Geode and your mods: $($_.Exception.Message)" Red
         Say "     Your mods are untouched. Check your internet, then run 'Fix Geode mods only.bat'." Red
+        Say "     If it keeps failing, open an issue with a screenshot: https://github.com/dan2756/gd-downgrade/issues" Red
         return $false
     }
 }
@@ -100,7 +102,7 @@ try {
     $lib = Find-Library $steam
     if (-not $lib) {
         Say "Couldn't find Geometry Dash in your Steam library. This only works for the Steam version." Red
-        Done 1
+        Done 10
     }
     $acf = Join-Path $lib "steamapps\appmanifest_$AppId.acf"
     $gd = Join-Path $lib "steamapps\common\Geometry Dash"
@@ -112,7 +114,7 @@ try {
         if ($Undo) { $relaunch += " -Undo" }
         if ($GeodeOnly) { $relaunch += " -GeodeOnly" }
         if ($Manifest) { $relaunch += " -Manifest $Manifest" }
-        Start-Process powershell -Verb RunAs -ArgumentList $relaunch
+        Start-Process (Join-Path $PSHOME "powershell.exe") -Verb RunAs -ArgumentList $relaunch
         exit 0
     }
 
@@ -122,7 +124,7 @@ try {
         Wait-GDClosed
         $before = Get-ExeTimestamp (Join-Path $gd "GeometryDash.exe")
         Say "1/2  Letting Steam update GD again"
-        Set-ItemProperty -Path $acf -Name IsReadOnly -Value $false
+        Set-ItemProperty -LiteralPath $acf -Name IsReadOnly -Value $false
         Start-Process "steam://validate/$AppId"
         Say "     Steam is checking the game files and will update GD to the newest version." Yellow
         Say "     When Steam has finished (GD shows Play in your library), press Enter here." Yellow
@@ -151,7 +153,7 @@ try {
         if ((Get-ExeTimestamp (Join-Path $gd "GeometryDash.exe")) -ne $GD2081Timestamp) {
             Say "Your Geometry Dash doesn't look like $TargetGd." Yellow
             Say "Run 'Downgrade GD to 2.2081.bat' instead, which downgrades GD and fixes your mods." Yellow
-            if ((Read-Host "Type Y to fix the mods for $TargetGd anyway") -ne "Y") { Done 1 }
+            if ((Read-Host "Type Y to fix the mods for $TargetGd anyway") -ne "Y") { Done 10 }
         }
         $backup = New-BackupDir
         if (Sync-GeodeSafely $gd $TargetGd $backup) {
@@ -161,7 +163,7 @@ try {
         Done 0
     }
 
-    Say "GD Downgrade: rolls Geometry Dash, Geode and your mods back to $TargetGd" Cyan
+    Say "GD Downgrade v${ToolVersion}: rolls Geometry Dash, Geode and your mods back to $TargetGd" Cyan
     Say ""
     Say "Found GD in: $gd"
     Say "Your save, Geode and mods get backed up to your Desktop first."
@@ -177,63 +179,70 @@ try {
 
     $backup = New-BackupDir
     $save = Join-Path $env:LOCALAPPDATA "GeometryDash"
-    if (Test-Path $save) {
+    if (Test-Path -LiteralPath $save) {
         Say "1/5  Backing up your save to: $backup"
-        Copy-Item -Path $save -Destination (Join-Path $backup "save") -Recurse -Force
+        Copy-Item -LiteralPath $save -Destination (Join-Path $backup "save") -Recurse -Force
     } else {
         Say "1/5  No save folder found, skipping the backup" Yellow
     }
 
-    $depot = Join-Path $steam "steamapps\content\app_$AppId\depot_$DepotId"
-    if (Test-Path $depot) { Remove-Item -Path $depot -Recurse -Force }
-    $log = Join-Path $steam "logs\content_log.txt"
-    if (Test-Path $log) { $script:logPos = (Get-Item $log).Length }
+    $exe = Join-Path $gd "GeometryDash.exe"
+    $alreadyThere = ($Manifest -eq $DefaultManifest) -and (Test-Path -LiteralPath $exe) -and ((Get-ExeTimestamp $exe) -eq $GD2081Timestamp)
+    if ($alreadyThere) {
+        Say "2/5  GD is already on $TargetGd, skipping the download" Green
+        Say "3/5  Nothing to copy"
+    } else {
+        $depot = Join-Path $steam "steamapps\content\app_$AppId\depot_$DepotId"
+        if (Test-Path -LiteralPath $depot) { Remove-Item -LiteralPath $depot -Recurse -Force }
+        $log = Join-Path $steam "logs\content_log.txt"
+        if (Test-Path $log) { $script:logPos = (Get-Item $log).Length }
 
-    $command = "download_depot $AppId $DepotId $Manifest"
-    Set-Clipboard -Value $command
-    Start-Process "steam://open/console"
-    Say ""
-    Say "2/5  Steam's console just opened. Click the box at the bottom of it," Yellow
-    Say "     press Ctrl+V and then Enter. (It pastes: $command)" Yellow
-    Say "     Then come back here and wait. Don't close this window." Yellow
-    Say ""
+        $command = "download_depot $AppId $DepotId $Manifest"
+        Set-Clipboard -Value $command
+        Start-Process "steam://open/console"
+        Say ""
+        Say "2/5  Steam's console just opened. Click the box at the bottom of it," Yellow
+        Say "     press Ctrl+V and then Enter. (It pastes: $command)" Yellow
+        Say "     Then come back here and wait. Don't close this window." Yellow
+        Say ""
 
-    $seen = ""
-    $lastSize = -1
-    $stableSince = $null
-    $deadline = (Get-Date).AddMinutes(45)
-    while ($true) {
-        Start-Sleep -Seconds 2
-        $seen += Read-NewLog $log
-        if ($seen -match "Depot download failed[^\r\n]*") {
-            Say ""
-            Say "Steam couldn't download it: $($Matches[0])" Red
-            Say "Check that the manifest ID is right and that you own GD on this Steam account." Red
-            Done 1
+        $seen = ""
+        $lastSize = -1
+        $stableSince = $null
+        $deadline = (Get-Date).AddMinutes(45)
+        while ($true) {
+            Start-Sleep -Seconds 2
+            $seen += Read-NewLog $log
+            if ($seen -match "Depot download failed[^\r\n]*") {
+                Say ""
+                Say "Steam couldn't download it: $($Matches[0])" Red
+                Say "Check that the manifest ID is right and that you own GD on this Steam account." Red
+                Done 10
+            }
+            $size = Folder-Size $depot
+            if ($size -gt 0) { Write-Host -NoNewline ("`r     Downloading... {0:N0} MB   " -f ($size / 1MB)) }
+            $complete = $seen -match "Depot download complete[^\r\n]*depot_$DepotId"
+            if ($size -gt 0 -and $size -eq $lastSize -and (Test-Path (Join-Path $depot "GeometryDash.exe"))) {
+                if (-not $stableSince) { $stableSince = Get-Date }
+            } else { $stableSince = $null }
+            $lastSize = $size
+            if ($complete -or ($stableSince -and ((Get-Date) - $stableSince).TotalSeconds -ge 30)) { break }
+            if ((Get-Date) -gt $deadline) {
+                Say ""
+                Say "This is taking too long. Make sure you pasted the command into Steam's console and pressed Enter, then run this again." Red
+                Done 10
+            }
         }
-        $size = Folder-Size $depot
-        if ($size -gt 0) { Write-Host -NoNewline ("`r     Downloading... {0:N0} MB   " -f ($size / 1MB)) }
-        $complete = $seen -match "Depot download complete[^\r\n]*depot_$DepotId"
-        if ($size -gt 0 -and $size -eq $lastSize -and (Test-Path (Join-Path $depot "GeometryDash.exe"))) {
-            if (-not $stableSince) { $stableSince = Get-Date }
-        } else { $stableSince = $null }
-        $lastSize = $size
-        if ($complete -or ($stableSince -and ((Get-Date) - $stableSince).TotalSeconds -ge 30)) { break }
-        if ((Get-Date) -gt $deadline) {
-            Say ""
-            Say "This is taking too long. Make sure you pasted the command into Steam's console and pressed Enter, then run this again." Red
-            Done 1
-        }
+        Write-Host ""
+
+        Wait-GDClosed
+        Say "3/5  Copying the $TargetGd files into your GD folder"
+        Copy-Item -Path (Join-Path $depot "*") -Destination $gd -Recurse -Force
+        Remove-Item -LiteralPath $depot -Recurse -Force -ErrorAction SilentlyContinue
     }
-    Write-Host ""
-
-    Wait-GDClosed
-    Say "3/5  Copying the $TargetGd files into your GD folder"
-    Copy-Item -Path (Join-Path $depot "*") -Destination $gd -Recurse -Force
 
     Say "4/5  Stopping Steam from updating GD again"
-    Set-ItemProperty -Path $acf -Name IsReadOnly -Value $true
-    Remove-Item -Path $depot -Recurse -Force -ErrorAction SilentlyContinue
+    Set-ItemProperty -LiteralPath $acf -Name IsReadOnly -Value $true
 
     Say "5/5  Putting Geode and your mods on their $TargetGd versions"
     $geodeOk = Sync-GeodeSafely $gd $TargetGd $backup
@@ -252,5 +261,5 @@ try {
     Say "Something went wrong: $($_.Exception.Message)" Red
     Say "Nothing in your save was deleted, and your mods are backed up on your Desktop." Red
     Say "Report it with a screenshot of this window: https://github.com/dan2756/gd-downgrade/issues" Red
-    Done 1
+    Done 10
 }

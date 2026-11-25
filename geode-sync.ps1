@@ -152,7 +152,10 @@ function Find-FittingVersion($versions, $targetGd, $loaderVersion) {
 
 function Save-Verified($url, $hash, $dest) {
     Invoke-WebRequest -Uri $url -OutFile $dest -Headers $GeodeHeaders -UseBasicParsing
-    $actual = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLower()
+    # .NET directly: Get-FileHash goes missing when PowerShell 7's module path leaks into 5.1.
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $fs = [IO.File]::OpenRead($dest)
+    try { $actual = -join ($sha.ComputeHash($fs) | ForEach-Object { $_.ToString("x2") }) } finally { $fs.Dispose(); $sha.Dispose() }
     if ($actual -ne "$hash".ToLower()) {
         Remove-Item -LiteralPath $dest -Force
         throw "Download of $url didn't match its published hash"
@@ -355,8 +358,8 @@ function Sync-Geode {
         Write-ModReport "Brought back $($restored.Count) mods you had before:" $restored Green
         Write-ModReport "Installed $($added.Count) missing dependencies:" $added Green
         Write-ModReport "Set aside $($parked.Count) mods that have no GD $TargetGd version (in geode\parked-mods, they come back when you switch GD back):" $parked Yellow
-        if ($parked -contains "absolllute.megahack" -and $present["absolllute.installer"]) {
-            Say "       (Mega Hack's installer mod puts the right Mega Hack back the next time you open GD)"
+        if ($parked -contains "absolllute.megahack") {
+            Say "       Mega Hack is a paid mod that isn't on the Geode index. Reinstall it for GD $TargetGd with its own installer." Yellow
         }
         return $true
     } finally {
